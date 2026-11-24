@@ -22,18 +22,32 @@ public class CoupleCarrom extends JFrame {
         add(boardPanel);
     }
 
-    class CarromBoardPanel extends JPanel implements ActionListener, MouseListener, MouseMotionListener {
+    class CarromBoardPanel extends JPanel implements ActionListener, MouseListener, MouseMotionListener, KeyListener {
         private Timer timer;
 
         private int girlScore = 0;
         private int boyScore = 0;
         private boolean isGirlTurn = true;
+        private boolean scoredThisTurn = false;
+        private boolean gameOver = false;
+        private boolean winnerDialogShown = false;
+        private String statusMessage = "";
+
+        // Board boundaries: surface is [35 .. 465], baseline is [90 .. 410]
+        private final int BOARD_MIN = 35;
+        private final int BOARD_MAX = 465;
+        private final int BASELINE_LEFT = 90;
+        private final int BASELINE_RIGHT = 410;
+        private final int TOP_BASELINE_Y = 120;
+        private final int BOTTOM_BASELINE_Y = 380;
 
         // Striker
-        private float strikerX = 250, strikerY = 480;
+        private float strikerX = 250, strikerY = TOP_BASELINE_Y;
         private float strikerVX = 0, strikerVY = 0;
         private final int STRIKER_RADIUS = 16;
         private boolean isAiming = false;
+        private boolean isSlidingStriker = false;
+        private boolean turnSwitchPending = false;
         private Point dragPoint;
 
         // Coins
@@ -41,8 +55,10 @@ public class CoupleCarrom extends JFrame {
 
         public CarromBoardPanel() {
             setBackground(new Color(250, 235, 240));
+            setFocusable(true);
             addMouseListener(this);
             addMouseMotionListener(this);
+            addKeyListener(this);
 
             initBoard();
 
@@ -53,66 +69,261 @@ public class CoupleCarrom extends JFrame {
         private void initBoard() {
             coins.clear();
             // Center Queen (👑)
-            coins.add(new Coin(250, 250, 0, "QUEEN"));
+            coins.add(new Coin(250, 250, "QUEEN"));
 
             // Girl Coins (Pink) & Boy Coins (Blue) surrounding center
             double angleStep = Math.PI / 3;
             for (int i = 0; i < 6; i++) {
                 double angle = i * angleStep;
-                int x = (int) (250 + 35 * Math.cos(angle));
-                int y = (int) (250 + 35 * Math.sin(angle));
+                float x = (float) (250 + 35 * Math.cos(angle));
+                float y = (float) (250 + 35 * Math.sin(angle));
                 String type = (i % 2 == 0) ? "GIRL" : "BOY";
-                coins.add(new Coin(x, y, 0, type));
+                coins.add(new Coin(x, y, type));
             }
 
+            girlScore = 0;
+            boyScore = 0;
+            isGirlTurn = true;
+            scoredThisTurn = false;
+            gameOver = false;
+            winnerDialogShown = false;
+            statusMessage = "";
+            turnSwitchPending = false;
             resetStriker();
+        }
+
+        private float getCurrentBaselineY() {
+            return isGirlTurn ? TOP_BASELINE_Y : BOTTOM_BASELINE_Y;
+        }
+
+        private float clampStrikerX(float x) {
+            float minX = BASELINE_LEFT + STRIKER_RADIUS;
+            float maxX = BASELINE_RIGHT - STRIKER_RADIUS;
+            return Math.max(minX, Math.min(maxX, x));
         }
 
         private void resetStriker() {
             strikerVX = 0;
             strikerVY = 0;
             strikerX = 250;
-            strikerY = isGirlTurn ? 120 : 480; // Top line for Girl, Bottom for Boy
+            strikerY = getCurrentBaselineY();
+            isAiming = false;
+            isSlidingStriker = false;
+            turnSwitchPending = false;
+        }
+
+        private boolean isAnyPieceMoving() {
+            if (Math.hypot(strikerVX, strikerVY) > 0.15) return true;
+            for (Coin c : coins) {
+                if (!c.inPocket && Math.hypot(c.vx, c.vy) > 0.15) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean areAllCoinsPocketed() {
+            for (Coin c : coins) {
+                if (!c.inPocket) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private void showGameOverDialog() {
+            if (winnerDialogShown) return;
+            winnerDialogShown = true;
+
+            String resultTitle;
+            String resultBody;
+
+            if (girlScore > boyScore) {
+                resultTitle = "👑 Winner: " + girlName + "! 🎉";
+                resultBody = girlName + " wins with " + girlScore + " points vs " + boyName + "'s " + boyScore + " points!";
+            } else if (boyScore > girlScore) {
+                resultTitle = "👑 Winner: " + boyName + "! 🎉";
+                resultBody = boyName + " wins with " + boyScore + " points vs " + girlName + "'s " + girlScore + " points!";
+            } else {
+                resultTitle = "🤝 It's a Tie!";
+                resultBody = "Both " + girlName + " and " + boyName + " scored " + girlScore + " points!";
+            }
+
+            statusMessage = resultTitle;
+            repaint();
+
+            SwingUtilities.invokeLater(() -> {
+                int choice = JOptionPane.showOptionDialog(
+                        CoupleCarrom.this,
+                        resultBody + "\n\nDo you want to play another round?",
+                        "Game Over - LovePlay Arena",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.INFORMATION_MESSAGE,
+                        null,
+                        new Object[]{"Play Again", "Close"},
+                        "Play Again"
+                );
+
+                if (choice == JOptionPane.YES_OPTION) {
+                    initBoard();
+                }
+            });
         }
 
         @Override
         public void actionPerformed(ActionEvent e) {
-            // Update Striker Physics
+            // 1. Update Striker Position & Friction
             strikerX += strikerVX;
             strikerY += strikerVY;
-            strikerVX *= 0.98f; // Friction
-            strikerVY *= 0.98f;
+            strikerVX *= 0.985f;
+            strikerVY *= 0.985f;
 
-            if (Math.abs(strikerVX) < 0.1) strikerVX = 0;
-            if (Math.abs(strikerVY) < 0.1) strikerVY = 0;
+            if (Math.abs(strikerVX) < 0.08f) strikerVX = 0;
+            if (Math.abs(strikerVY) < 0.08f) strikerVY = 0;
 
-            // Bounce Striker off Board Borders
-            if (strikerX < 45 || strikerX > 455) strikerVX = -strikerVX;
-            if (strikerY < 45 || strikerY > 455) strikerVY = -strikerVY;
+            // Clamp & Bounce Striker cleanly inside board bounds
+            float minStriker = BOARD_MIN + STRIKER_RADIUS;
+            float maxStriker = BOARD_MAX - STRIKER_RADIUS;
 
-            // Update Coins Physics & Collisions
+            if (strikerX < minStriker) {
+                strikerX = minStriker;
+                strikerVX = Math.abs(strikerVX) * 0.85f;
+            } else if (strikerX > maxStriker) {
+                strikerX = maxStriker;
+                strikerVX = -Math.abs(strikerVX) * 0.85f;
+            }
+
+            if (strikerY < minStriker) {
+                strikerY = minStriker;
+                strikerVY = Math.abs(strikerVY) * 0.85f;
+            } else if (strikerY > maxStriker) {
+                strikerY = maxStriker;
+                strikerVY = -Math.abs(strikerVY) * 0.85f;
+            }
+
+            // 2. Update Coins Position, Bounds & Striker Collision
             for (Coin coin : coins) {
-                if (!coin.inPocket) {
-                    coin.x += coin.vx;
-                    coin.y += coin.vy;
-                    coin.vx *= 0.98f;
-                    coin.vy *= 0.98f;
+                if (coin.inPocket) continue;
 
-                    if (coin.x < 45 || coin.x > 455) coin.vx = -coin.vx;
-                    if (coin.y < 45 || coin.y > 455) coin.vy = -coin.vy;
+                coin.x += coin.vx;
+                coin.y += coin.vy;
+                coin.vx *= 0.985f;
+                coin.vy *= 0.985f;
 
-                    // Striker vs Coin Collision
-                    float dx = coin.x - strikerX;
-                    float dy = coin.y - strikerY;
-                    float dist = (float) Math.hypot(dx, dy);
-                    if (dist < STRIKER_RADIUS + coin.radius) {
-                        float angle = (float) Math.atan2(dy, dx);
-                        coin.vx = (float) (Math.cos(angle) * 8);
-                        coin.vy = (float) (Math.sin(angle) * 8);
+                if (Math.abs(coin.vx) < 0.08f) coin.vx = 0;
+                if (Math.abs(coin.vy) < 0.08f) coin.vy = 0;
+
+                float minCoin = BOARD_MIN + coin.radius;
+                float maxCoin = BOARD_MAX - coin.radius;
+
+                if (coin.x < minCoin) {
+                    coin.x = minCoin;
+                    coin.vx = Math.abs(coin.vx) * 0.85f;
+                } else if (coin.x > maxCoin) {
+                    coin.x = maxCoin;
+                    coin.vx = -Math.abs(coin.vx) * 0.85f;
+                }
+
+                if (coin.y < minCoin) {
+                    coin.y = minCoin;
+                    coin.vy = Math.abs(coin.vy) * 0.85f;
+                } else if (coin.y > maxCoin) {
+                    coin.y = maxCoin;
+                    coin.vy = -Math.abs(coin.vy) * 0.85f;
+                }
+
+                // Striker vs Coin Elastic-like Collision + Separation
+                float dx = coin.x - strikerX;
+                float dy = coin.y - strikerY;
+                float dist = (float) Math.hypot(dx, dy);
+                float minDist = STRIKER_RADIUS + coin.radius;
+
+                if (dist > 0.001f && dist < minDist) {
+                    float nx = dx / dist;
+                    float ny = dy / dist;
+                    float overlap = minDist - dist;
+
+                    strikerX -= nx * overlap * 0.4f;
+                    strikerY -= ny * overlap * 0.4f;
+                    coin.x += nx * overlap * 0.6f;
+                    coin.y += ny * overlap * 0.6f;
+
+                    float rvx = coin.vx - strikerVX;
+                    float rvy = coin.vy - strikerVY;
+                    float velAlongNormal = rvx * nx + rvy * ny;
+
+                    if (velAlongNormal < 0) {
+                        float restitution = 0.85f;
+                        float impulse = -(1 + restitution) * velAlongNormal;
+                        float totalMass = 2.0f;
+
+                        coin.vx += (impulse / totalMass) * nx * 1.3f;
+                        coin.vy += (impulse / totalMass) * ny * 1.3f;
+                        strikerVX -= (impulse / totalMass) * nx * 0.7f;
+                        strikerVY -= (impulse / totalMass) * ny * 0.7f;
                     }
+                }
 
-                    // Check Pockets (4 Corners)
-                    checkPocket(coin);
+                checkPocket(coin);
+            }
+
+            // 3. Coin vs Coin Collision
+            for (int i = 0; i < coins.size(); i++) {
+                Coin a = coins.get(i);
+                if (a.inPocket) continue;
+
+                for (int j = i + 1; j < coins.size(); j++) {
+                    Coin b = coins.get(j);
+                    if (b.inPocket) continue;
+
+                    float dx = b.x - a.x;
+                    float dy = b.y - a.y;
+                    float dist = (float) Math.hypot(dx, dy);
+                    float minDist = a.radius + b.radius;
+
+                    if (dist > 0.001f && dist < minDist) {
+                        float nx = dx / dist;
+                        float ny = dy / dist;
+                        float overlap = (minDist - dist) * 0.5f;
+
+                        a.x -= nx * overlap;
+                        a.y -= ny * overlap;
+                        b.x += nx * overlap;
+                        b.y += ny * overlap;
+
+                        float rvx = b.vx - a.vx;
+                        float rvy = b.vy - a.vy;
+                        float velAlongNormal = rvx * nx + rvy * ny;
+
+                        if (velAlongNormal < 0) {
+                            float impulse = -0.9f * velAlongNormal * 0.5f;
+                            a.vx -= impulse * nx;
+                            a.vy -= impulse * ny;
+                            b.vx += impulse * nx;
+                            b.vy += impulse * ny;
+                        }
+                    }
+                }
+            }
+
+            // 4. After all pieces stop: check game over first, otherwise handle bonus/turn switch
+            if (turnSwitchPending && !isAnyPieceMoving()) {
+                turnSwitchPending = false;
+
+                if (areAllCoinsPocketed()) {
+                    gameOver = true;
+                    strikerVX = 0;
+                    strikerVY = 0;
+                    showGameOverDialog();
+                } else {
+                    if (scoredThisTurn) {
+                        String currentPlayer = isGirlTurn ? girlName : boyName;
+                        statusMessage = "🎉 +10 pts! " + currentPlayer + " gets an extra chance!";
+                    } else {
+                        isGirlTurn = !isGirlTurn;
+                        statusMessage = "";
+                    }
+                    resetStriker();
                 }
             }
 
@@ -120,15 +331,23 @@ public class CoupleCarrom extends JFrame {
         }
 
         private void checkPocket(Coin coin) {
-            int[][] pockets = {{45, 45}, {455, 45}, {45, 455}, {455, 455}};
+            int[][] pockets = {{47, 47}, {452, 47}, {47, 452}, {452, 452}};
             for (int[] p : pockets) {
-                if (Math.hypot(coin.x - p[0], coin.y - p[1]) < 25) {
+                if (Math.hypot(coin.x - p[0], coin.y - p[1]) < 24) {
                     coin.inPocket = true;
-                    if (coin.type.equals("GIRL")) girlScore += 10;
-                    else if (coin.type.equals("BOY")) boyScore += 10;
-                    else if (coin.type.equals("QUEEN")) {
-                        if (isGirlTurn) girlScore += 30; else boyScore += 30;
+                    coin.vx = 0;
+                    coin.vy = 0;
+                    if (coin.type.equals("GIRL")) {
+                        girlScore += 10;
+                        scoredThisTurn = true;
+                    } else if (coin.type.equals("BOY")) {
+                        boyScore += 10;
+                        scoredThisTurn = true;
+                    } else if (coin.type.equals("QUEEN")) {
+                        if (isGirlTurn) girlScore += 30;
+                        else boyScore += 30;
                     }
+                    break;
                 }
             }
         }
@@ -160,15 +379,15 @@ public class CoupleCarrom extends JFrame {
 
             // Baseline Indicators
             g2d.setColor(new Color(200, 150, 170));
-            g2d.drawLine(90, 120, 410, 120); // Top Baseline
-            g2d.drawLine(90, 380, 410, 380); // Bottom Baseline
+            g2d.drawLine(BASELINE_LEFT, TOP_BASELINE_Y, BASELINE_RIGHT, TOP_BASELINE_Y);
+            g2d.drawLine(BASELINE_LEFT, BOTTOM_BASELINE_Y, BASELINE_RIGHT, BOTTOM_BASELINE_Y);
 
             // Draw Coins
             for (Coin coin : coins) {
                 if (!coin.inPocket) {
-                    if (coin.type.equals("GIRL")) g2d.setColor(new Color(255, 105, 180)); // Pink
-                    else if (coin.type.equals("BOY")) g2d.setColor(new Color(100, 149, 237)); // Blue
-                    else g2d.setColor(new Color(255, 215, 0)); // Queen Gold
+                    if (coin.type.equals("GIRL")) g2d.setColor(new Color(255, 105, 180));
+                    else if (coin.type.equals("BOY")) g2d.setColor(new Color(100, 149, 237));
+                    else g2d.setColor(new Color(255, 215, 0));
 
                     g2d.fillOval((int) coin.x - coin.radius, (int) coin.y - coin.radius, coin.radius * 2, coin.radius * 2);
                     g2d.setColor(Color.WHITE);
@@ -176,17 +395,24 @@ public class CoupleCarrom extends JFrame {
                 }
             }
 
-            // Draw Striker
-            g2d.setColor(new Color(186, 85, 211));
-            g2d.fillOval((int) strikerX - STRIKER_RADIUS, (int) strikerY - STRIKER_RADIUS, STRIKER_RADIUS * 2, STRIKER_RADIUS * 2);
-            g2d.setColor(Color.WHITE);
-            g2d.drawOval((int) strikerX - STRIKER_RADIUS, (int) strikerY - STRIKER_RADIUS, STRIKER_RADIUS * 2, STRIKER_RADIUS * 2);
+            // Draw Striker when game is active
+            if (!gameOver) {
+                g2d.setColor(new Color(186, 85, 211));
+                g2d.fillOval((int) strikerX - STRIKER_RADIUS, (int) strikerY - STRIKER_RADIUS, STRIKER_RADIUS * 2, STRIKER_RADIUS * 2);
+                g2d.setColor(Color.WHITE);
+                g2d.drawOval((int) strikerX - STRIKER_RADIUS, (int) strikerY - STRIKER_RADIUS, STRIKER_RADIUS * 2, STRIKER_RADIUS * 2);
+            }
 
-            // Draw Aim Line when Dragging Mouse
-            if (isAiming && dragPoint != null) {
+            // Draw Aim Line when Aiming
+            if (!gameOver && isAiming && dragPoint != null) {
                 g2d.setColor(new Color(255, 20, 147));
                 g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{9}, 0));
-                g2d.drawLine((int) strikerX, (int) strikerY, (int) strikerX + ((int) strikerX - dragPoint.x), (int) strikerY + ((int) strikerY - dragPoint.y));
+                g2d.drawLine(
+                        (int) strikerX,
+                        (int) strikerY,
+                        (int) (strikerX + (strikerX - dragPoint.x)),
+                        (int) (strikerY + (strikerY - dragPoint.y))
+                );
             }
 
             // Scoreboard & Turn Display
@@ -195,22 +421,52 @@ public class CoupleCarrom extends JFrame {
             g2d.drawString(girlName + " 👧 (Pink): " + girlScore + " pts", 35, 520);
             g2d.drawString(boyName + " 👦 (Blue): " + boyScore + " pts", 280, 520);
 
-            String turnText = (isGirlTurn ? girlName + " 👧 (Top Turn)" : boyName + " 👦 (Bottom Turn)");
-            g2d.drawString("Current Turn: " + turnText, 140, 555);
+            String turnText = gameOver
+                    ? "Match Finished!"
+                    : (isGirlTurn ? (girlName + " 👧 (Top Turn)") : (boyName + " 👦 (Bottom Turn)"));
+            g2d.drawString("Current Turn: " + turnText, 120, 555);
+
+            if (!statusMessage.isEmpty()) {
+                g2d.setColor(new Color(219, 39, 119));
+                g2d.setFont(new Font("SansSerif", Font.BOLD, 13));
+                g2d.drawString(statusMessage, 115, 578);
+            }
+
+            g2d.setColor(new Color(110, 40, 130));
+            g2d.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            g2d.drawString("Tip: Drag striker or use ← / → to slide on line, pull back to shoot", 75, 602);
         }
 
-        // --- Mouse Drag Mechanics for Aiming & Shooting ---
+        // --- Mouse Drag Mechanics for Sliding & Shooting ---
         @Override
         public void mousePressed(MouseEvent e) {
-            if (Math.hypot(e.getX() - strikerX, e.getY() - strikerY) < STRIKER_RADIUS + 10) {
-                isAiming = true;
+            requestFocusInWindow();
+            if (gameOver || turnSwitchPending || isAnyPieceMoving()) return;
+
+            if (Math.hypot(e.getX() - strikerX, e.getY() - strikerY) < STRIKER_RADIUS + 14) {
+                isSlidingStriker = true;
+                isAiming = false;
                 dragPoint = e.getPoint();
             }
         }
 
         @Override
         public void mouseDragged(MouseEvent e) {
-            if (isAiming) {
+            if (gameOver || turnSwitchPending || isAnyPieceMoving()) return;
+
+            if (isSlidingStriker) {
+                float baseY = getCurrentBaselineY();
+                float pullDistY = Math.abs(e.getY() - baseY);
+                if (pullDistY > 18) {
+                    isSlidingStriker = false;
+                    isAiming = true;
+                    dragPoint = e.getPoint();
+                } else {
+                    strikerX = clampStrikerX(e.getX());
+                    strikerY = baseY;
+                }
+                repaint();
+            } else if (isAiming) {
                 dragPoint = e.getPoint();
                 repaint();
             }
@@ -218,21 +474,49 @@ public class CoupleCarrom extends JFrame {
 
         @Override
         public void mouseReleased(MouseEvent e) {
-            if (isAiming && dragPoint != null) {
-                strikerVX = (strikerX - dragPoint.x) * 0.25f;
-                strikerVY = (strikerY - dragPoint.y) * 0.25f;
-                isAiming = false;
+            if (!gameOver && isAiming && dragPoint != null) {
+                float powerX = (strikerX - dragPoint.x) * 0.22f;
+                float powerY = (strikerY - dragPoint.y) * 0.22f;
 
-                // Switch Turns after shooting
-                Timer turnTimer = new Timer(3000, evt -> {
-                    isGirlTurn = !isGirlTurn;
-                    resetStriker();
-                });
-                turnTimer.setRepeats(false);
-                turnTimer.start();
+                float maxSpeed = 16.0f;
+                float speed = (float) Math.hypot(powerX, powerY);
+                if (speed > maxSpeed) {
+                    powerX = (powerX / speed) * maxSpeed;
+                    powerY = (powerY / speed) * maxSpeed;
+                }
+
+                scoredThisTurn = false;
+                statusMessage = "";
+                strikerVX = powerX;
+                strikerVY = powerY;
+                isAiming = false;
+                turnSwitchPending = true;
+            }
+            isSlidingStriker = false;
+            dragPoint = null;
+        }
+
+        // --- Keyboard Left / Right Sliding ---
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (gameOver || turnSwitchPending || isAnyPieceMoving() || isAiming) return;
+
+            float step = 10.0f;
+            float baseY = getCurrentBaselineY();
+
+            if (e.getKeyCode() == KeyEvent.VK_LEFT) {
+                strikerX = clampStrikerX(strikerX - step);
+                strikerY = baseY;
+                repaint();
+            } else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
+                strikerX = clampStrikerX(strikerX + step);
+                strikerY = baseY;
+                repaint();
             }
         }
 
+        @Override public void keyReleased(KeyEvent e) {}
+        @Override public void keyTyped(KeyEvent e) {}
         @Override public void mouseClicked(MouseEvent e) {}
         @Override public void mouseEntered(MouseEvent e) {}
         @Override public void mouseExited(MouseEvent e) {}
@@ -246,7 +530,7 @@ public class CoupleCarrom extends JFrame {
         String type;
         boolean inPocket = false;
 
-        public Coin(float x, float y, float speed, String type) {
+        public Coin(float x, float y, String type) {
             this.x = x;
             this.y = y;
             this.type = type;
