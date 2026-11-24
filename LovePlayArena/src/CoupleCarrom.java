@@ -12,8 +12,8 @@ public class CoupleCarrom extends JFrame {
         this.girlName = girlName;
         this.boyName = boyName;
 
-        setTitle("🥏 LovePlay Arena - Couple Carrom 👑");
-        setSize(550, 680);
+        setTitle("LovePlay Arena - Couple Carrom");
+        setSize(520, 665);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(false);
@@ -54,7 +54,7 @@ public class CoupleCarrom extends JFrame {
         private List<Coin> coins = new ArrayList<>();
 
         public CarromBoardPanel() {
-            setBackground(new Color(250, 235, 240));
+            setBackground(new Color(255, 240, 246));
             setFocusable(true);
             addMouseListener(this);
             addMouseMotionListener(this);
@@ -68,10 +68,10 @@ public class CoupleCarrom extends JFrame {
 
         private void initBoard() {
             coins.clear();
-            // Center Queen (👑)
+            // Center Queen
             coins.add(new Coin(250, 250, "QUEEN"));
 
-            // Girl Coins (Pink) & Boy Coins (Blue) surrounding center
+            // Girl Coins & Boy Coins surrounding center
             double angleStep = Math.PI / 3;
             for (int i = 0; i < 6; i++) {
                 double angle = i * angleStep;
@@ -100,6 +100,11 @@ public class CoupleCarrom extends JFrame {
             float minX = BASELINE_LEFT + STRIKER_RADIUS;
             float maxX = BASELINE_RIGHT - STRIKER_RADIUS;
             return Math.max(minX, Math.min(maxX, x));
+        }
+
+        private boolean isNearCurrentBaseline(int mx, int my) {
+            float baseY = getCurrentBaselineY();
+            return Math.abs(my - baseY) <= 14 && mx >= BASELINE_LEFT && mx <= BASELINE_RIGHT;
         }
 
         private void resetStriker() {
@@ -139,13 +144,13 @@ public class CoupleCarrom extends JFrame {
             String resultBody;
 
             if (girlScore > boyScore) {
-                resultTitle = "👑 Winner: " + girlName + "! 🎉";
+                resultTitle = "Winner: " + girlName + "!";
                 resultBody = girlName + " wins with " + girlScore + " points vs " + boyName + "'s " + boyScore + " points!";
             } else if (boyScore > girlScore) {
-                resultTitle = "👑 Winner: " + boyName + "! 🎉";
+                resultTitle = "Winner: " + boyName + "!";
                 resultBody = boyName + " wins with " + boyScore + " points vs " + girlName + "'s " + girlScore + " points!";
             } else {
-                resultTitle = "🤝 It's a Tie!";
+                resultTitle = "It's a Tie!";
                 resultBody = "Both " + girlName + " and " + boyName + " scored " + girlScore + " points!";
             }
 
@@ -318,7 +323,7 @@ public class CoupleCarrom extends JFrame {
                 } else {
                     if (scoredThisTurn) {
                         String currentPlayer = isGirlTurn ? girlName : boyName;
-                        statusMessage = "🎉 +10 pts! " + currentPlayer + " gets an extra chance!";
+                        statusMessage = "+10 pts! " + currentPlayer + " gets an extra chance!";
                     } else {
                         isGirlTurn = !isGirlTurn;
                         statusMessage = "";
@@ -357,96 +362,185 @@ public class CoupleCarrom extends JFrame {
             super.paintComponent(g);
             Graphics2D g2d = (Graphics2D) g;
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-            // Carrom Outer Wooden Frame
-            g2d.setColor(new Color(210, 140, 100));
-            g2d.fillRoundRect(15, 15, 470, 470, 20, 20);
+            // 1. Soft Romantic Background
+            g2d.setPaint(new GradientPaint(0, 0, new Color(255, 240, 246), 0, getHeight(), new Color(245, 235, 255)));
+            g2d.fillRect(0, 0, getWidth(), getHeight());
 
-            // Carrom Playing Surface
-            g2d.setColor(new Color(255, 245, 238));
-            g2d.fillRect(35, 35, 430, 430);
+            // 2. Outer Wooden Frame with Subtle Shadow & Gold Trim
+            g2d.setColor(new Color(90, 45, 65, 45));
+            g2d.fillRoundRect(18, 20, 470, 470, 26, 26);
 
-            // 4 Corner Pockets (Holes)
-            g2d.setColor(new Color(50, 50, 50));
-            g2d.fillOval(30, 30, 35, 35);
-            g2d.fillOval(435, 30, 35, 35);
-            g2d.fillOval(30, 435, 35, 35);
-            g2d.fillOval(435, 435, 35, 35);
+            g2d.setColor(new Color(176, 102, 82));
+            g2d.fillRoundRect(15, 15, 470, 470, 24, 24);
 
-            // Center Circle
-            g2d.setColor(new Color(255, 182, 193));
-            g2d.drawOval(215, 215, 70, 70);
+            g2d.setColor(new Color(235, 185, 120));
+            g2d.setStroke(new BasicStroke(2f));
+            g2d.drawRoundRect(20, 20, 460, 460, 20, 20);
 
-            // Baseline Indicators
-            g2d.setColor(new Color(200, 150, 170));
+            // 3. Carrom Playing Surface (Cream Blush)
+            g2d.setColor(new Color(255, 248, 245));
+            g2d.fillRoundRect(35, 35, 430, 430, 14, 14);
+
+            // Subtle Inner Border Line
+            g2d.setColor(new Color(240, 195, 210));
+            g2d.setStroke(new BasicStroke(1.5f));
+            g2d.drawRoundRect(42, 42, 416, 416, 10, 10);
+
+            // 4. Center Couple Medallion
+            int cx = 250, cy = 250;
+            g2d.setColor(new Color(255, 192, 203, 130));
+            g2d.fillOval(cx - 56, cy - 56, 112, 112);
+
+            g2d.setColor(new Color(236, 72, 153));
+            g2d.setStroke(new BasicStroke(2f));
+            g2d.drawOval(cx - 56, cy - 56, 112, 112);
+
+            g2d.setColor(new Color(212, 175, 55));
+            g2d.setStroke(new BasicStroke(1.5f));
+            g2d.drawOval(cx - 42, cy - 42, 84, 84);
+
+            // 8 Delicate Rays around Center
+            g2d.setColor(new Color(244, 114, 182, 170));
+            for (int i = 0; i < 8; i++) {
+                double a = i * (Math.PI / 4);
+                int x2 = (int) (cx + Math.cos(a) * 54);
+                int y2 = (int) (cy + Math.sin(a) * 54);
+                g2d.drawLine(cx, cy, x2, y2);
+            }
+
+            // Center Heart Emblem
+            g2d.setColor(new Color(255, 248, 245));
+            g2d.fillOval(cx - 16, cy - 16, 32, 32);
+            g2d.setColor(new Color(225, 29, 72));
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 18));
+            g2d.drawString("<3", cx - 9, cy + 6);
+
+            // 5. Baselines with End Circles
+            g2d.setStroke(new BasicStroke(2f));
+
+            // Top Baseline (Girl)
+            g2d.setColor(new Color(244, 114, 182));
             g2d.drawLine(BASELINE_LEFT, TOP_BASELINE_Y, BASELINE_RIGHT, TOP_BASELINE_Y);
-            g2d.drawLine(BASELINE_LEFT, BOTTOM_BASELINE_Y, BASELINE_RIGHT, BOTTOM_BASELINE_Y);
+            g2d.fillOval(BASELINE_LEFT - 5, TOP_BASELINE_Y - 5, 10, 10);
+            g2d.fillOval(BASELINE_RIGHT - 5, TOP_BASELINE_Y - 5, 10, 10);
 
-            // Draw Coins
+            // Bottom Baseline (Boy)
+            g2d.setColor(new Color(96, 165, 250));
+            g2d.drawLine(BASELINE_LEFT, BOTTOM_BASELINE_Y, BASELINE_RIGHT, BOTTOM_BASELINE_Y);
+            g2d.fillOval(BASELINE_LEFT - 5, BOTTOM_BASELINE_Y - 5, 10, 10);
+            g2d.fillOval(BASELINE_RIGHT - 5, BOTTOM_BASELINE_Y - 5, 10, 10);
+
+            // 6. 4 Corner Pockets with Gold Rim
+            int[][] pocketCenters = {{47, 47}, {452, 47}, {47, 452}, {452, 452}};
+            for (int[] p : pocketCenters) {
+                g2d.setColor(new Color(212, 175, 55));
+                g2d.fillOval(p[0] - 20, p[1] - 20, 40, 40);
+
+                g2d.setColor(new Color(38, 28, 36));
+                g2d.fillOval(p[0] - 17, p[1] - 17, 34, 34);
+            }
+
+            // 7. Draw Coins
             for (Coin coin : coins) {
                 if (!coin.inPocket) {
-                    if (coin.type.equals("GIRL")) g2d.setColor(new Color(255, 105, 180));
-                    else if (coin.type.equals("BOY")) g2d.setColor(new Color(100, 149, 237));
-                    else g2d.setColor(new Color(255, 215, 0));
+                    if (coin.type.equals("GIRL")) {
+                        g2d.setColor(new Color(255, 105, 180));
+                    } else if (coin.type.equals("BOY")) {
+                        g2d.setColor(new Color(79, 134, 247));
+                    } else {
+                        g2d.setColor(new Color(255, 215, 0));
+                    }
 
                     g2d.fillOval((int) coin.x - coin.radius, (int) coin.y - coin.radius, coin.radius * 2, coin.radius * 2);
+
                     g2d.setColor(Color.WHITE);
+                    g2d.setStroke(new BasicStroke(1.8f));
                     g2d.drawOval((int) coin.x - coin.radius, (int) coin.y - coin.radius, coin.radius * 2, coin.radius * 2);
+
+                    g2d.setStroke(new BasicStroke(1.2f));
+                    g2d.drawOval((int) coin.x - coin.radius + 4, (int) coin.y - coin.radius + 4, (coin.radius - 4) * 2, (coin.radius - 4) * 2);
                 }
             }
 
-            // Draw Striker when game is active
+            // 8. Draw Striker
             if (!gameOver) {
-                g2d.setColor(new Color(186, 85, 211));
+                g2d.setColor(new Color(168, 85, 247));
                 g2d.fillOval((int) strikerX - STRIKER_RADIUS, (int) strikerY - STRIKER_RADIUS, STRIKER_RADIUS * 2, STRIKER_RADIUS * 2);
-                g2d.setColor(Color.WHITE);
+
+                g2d.setColor(new Color(255, 228, 240));
+                g2d.setStroke(new BasicStroke(2f));
                 g2d.drawOval((int) strikerX - STRIKER_RADIUS, (int) strikerY - STRIKER_RADIUS, STRIKER_RADIUS * 2, STRIKER_RADIUS * 2);
+
+                g2d.setColor(Color.WHITE);
+                g2d.fillOval((int) strikerX - 5, (int) strikerY - 5, 10, 10);
             }
 
-            // Draw Aim Line when Aiming
+            // 9. Draw Aim Trajectory Line
             if (!gameOver && isAiming && dragPoint != null) {
-                g2d.setColor(new Color(255, 20, 147));
-                g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{9}, 0));
-                g2d.drawLine(
-                        (int) strikerX,
-                        (int) strikerY,
-                        (int) (strikerX + (strikerX - dragPoint.x)),
-                        (int) (strikerY + (strikerY - dragPoint.y))
-                );
+                int targetX = (int) (strikerX + (strikerX - dragPoint.x));
+                int targetY = (int) (strikerY + (strikerY - dragPoint.y));
+
+                g2d.setColor(new Color(236, 72, 153));
+                g2d.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{8, 6}, 0));
+                g2d.drawLine((int) strikerX, (int) strikerY, targetX, targetY);
+                g2d.fillOval(targetX - 5, targetY - 5, 10, 10);
             }
 
-            // Scoreboard & Turn Display
-            g2d.setColor(new Color(110, 40, 130));
-            g2d.setFont(new Font("SansSerif", Font.BOLD, 16));
-            g2d.drawString(girlName + " 👧 (Pink): " + girlScore + " pts", 35, 520);
-            g2d.drawString(boyName + " 👦 (Blue): " + boyScore + " pts", 280, 520);
+            // 10. Scoreboard Card & Turn Status
+            g2d.setColor(Color.WHITE);
+            g2d.fillRoundRect(20, 496, 460, 120, 16, 16);
+            g2d.setColor(new Color(244, 180, 205));
+            g2d.setStroke(new BasicStroke(1.5f));
+            g2d.drawRoundRect(20, 496, 460, 120, 16, 16);
 
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 15));
+            g2d.setColor(new Color(219, 39, 119));
+            g2d.drawString(girlName + " : " + girlScore + " pts", 35, 522);
+
+            g2d.setColor(new Color(37, 99, 235));
+            g2d.drawString(boyName + " : " + boyScore + " pts", 275, 522);
+
+            g2d.setColor(new Color(88, 28, 135));
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
             String turnText = gameOver
                     ? "Match Finished!"
-                    : (isGirlTurn ? (girlName + " 👧 (Top Turn)") : (boyName + " 👦 (Bottom Turn)"));
-            g2d.drawString("Current Turn: " + turnText, 120, 555);
+                    : (isGirlTurn ? ("Turn: " + girlName + " (Top)") : ("Turn: " + boyName + " (Bottom)"));
+            g2d.drawString(turnText, 145, 550);
 
             if (!statusMessage.isEmpty()) {
-                g2d.setColor(new Color(219, 39, 119));
-                g2d.setFont(new Font("SansSerif", Font.BOLD, 13));
-                g2d.drawString(statusMessage, 115, 578);
+                g2d.setColor(new Color(190, 24, 93));
+                g2d.setFont(new Font("SansSerif", Font.BOLD, 12));
+                g2d.drawString(statusMessage, 115, 574);
             }
 
-            g2d.setColor(new Color(110, 40, 130));
-            g2d.setFont(new Font("SansSerif", Font.PLAIN, 12));
-            g2d.drawString("Tip: Drag striker or use ← / → to slide on line, pull back to shoot", 75, 602);
+            g2d.setColor(new Color(107, 114, 128));
+            g2d.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            g2d.drawString("Click baseline to move striker, drag/arrows to slide, pull back to shoot", 78, 598);
         }
 
-        // --- Mouse Drag Mechanics for Sliding & Shooting ---
+        // --- Mouse Click / Drag Mechanics for Baseline Move, Sliding & Shooting ---
         @Override
         public void mousePressed(MouseEvent e) {
             requestFocusInWindow();
             if (gameOver || turnSwitchPending || isAnyPieceMoving()) return;
 
-            if (Math.hypot(e.getX() - strikerX, e.getY() - strikerY) < STRIKER_RADIUS + 14) {
+            int mx = e.getX();
+            int my = e.getY();
+
+            if (Math.hypot(mx - strikerX, my - strikerY) < STRIKER_RADIUS + 14) {
                 isSlidingStriker = true;
                 isAiming = false;
                 dragPoint = e.getPoint();
+                repaint();
+            } else if (isNearCurrentBaseline(mx, my)) {
+                strikerX = clampStrikerX(mx);
+                strikerY = getCurrentBaselineY();
+                isSlidingStriker = true;
+                isAiming = false;
+                dragPoint = e.getPoint();
+                repaint();
             }
         }
 
